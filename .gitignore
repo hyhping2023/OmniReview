@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+cleaning.py
+data/*.parquet
+
 # C extensions
 *.so
 
