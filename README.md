@@ -2,7 +2,7 @@
 
 OmniReview is a reviewer-paper matching pipeline. It extracts reviewer author ids, gathers each author's papers from OAG-style metadata, summarizes papers with an LLM, embeds both LLM summaries and raw paper text, and runs a dual-path paper-set MMoE reranker for inference.
 
-Datasets are available at [HYHPING2023/OmniReview](https://huggingface.co/datasets/HYHPING2023/OmniReview). Model weights are available at [HYHPING2023/OmniReview](https://huggingface.co/HYHPING2023/OmniReview).
+Datasets are available at [HYHPING2023/OmniReview](https://huggingface.co/datasets/HYHPING2023/OmniReview). The OAG per-paper Discipline Taxonomy files are provided in the same dataset repository. Model weights are available at [HYHPING2023/OmniReview](https://huggingface.co/HYHPING2023/OmniReview).
 
 ## Repository Layout
 
@@ -14,7 +14,8 @@ Datasets are available at [HYHPING2023/OmniReview](https://huggingface.co/datase
 - `models/paper_set_dual_path_mmoe.py`: dual-path MMoE model that fuses summary and raw-text embedding paths.
 - `models/reviewer_paper_encoders.py`: reviewer paper-set encoders based on masked mean pooling or Transformer encoding.
 - `models/rerankers.py`: interaction feature builders and ranking/classification losses.
-- `data/category.json`: category metadata.
+- `baseline/`: baseline implementations and evaluation utilities, including dual-tower, RGCN, generic embedding-similarity evaluation, and confidence calibration.
+- `data/category.json`: full Discipline Taxonomy metadata.
 - `data/cache/`: generated author-paper files, summaries, embeddings, and other local caches.
 - `data/checkpoints/`: local checkpoints if you train or fine-tune the reranker.
 
@@ -34,30 +35,29 @@ pip install pytrec_eval
 
 ## vLLM Services
 
-The preprocessing code expects OpenAI-compatible vLLM endpoints for both summarization and embedding.
+The preprocessing code expects OpenAI-compatible vLLM endpoints for both summarization and embedding. The paper summarization LLM is `Qwen3-30B-A3B`, and the embedding model is `Qwen3-Embedding-4B`.
 
 Start the LLM service used by `llm/summarizer.py`:
 
 ```bash
-vllm serve <llm-model-id> --port 20000
+vllm serve Qwen/Qwen3-30B-A3B --port 20000
 ```
 
-Start the embedding services used by `models/encoders.py`:
+Start the embedding service used by `models/encoders.py`:
 
 ```bash
-vllm serve <qwen-embedding-model-id> --port 9002 --task embed
-vllm serve <bge-m3-model-id> --port 8004 --task embed
+vllm serve Qwen/Qwen3-Embedding-4B --port 9002 --task embed
 ```
 
 If you use different ports or model names, update `LLM_PORTS` and `LLM_HOST` in `llm/summarizer.py`, and update the embedding endpoint mapping in `models/encoders.py`.
 
 ## Preprocessing Pipeline
 
-The preprocessing workflow is implemented in `preprocess.py`. It first extracts reviewer author ids from the train, validation, and test parquet files. Those author ids are then used to retrieve each author's paper list from OAG-style metadata, producing author-to-publication JSONL files for each split.
+The preprocessing workflow is implemented in `preprocess.py`. It first extracts reviewer author ids from the train, validation, and test parquet files. Those author ids are then used to retrieve each author's paper list from OAG-style metadata, producing author-to-publication JSONL files for each split. The OAG per-paper Discipline Taxonomy used by this process is available together with the dataset on Hugging Face, while the complete Discipline Taxonomy metadata is kept under `data/`.
 
 After author papers are prepared, `preprocess.py` sends paper ids and paper content to the LLM summarization service and stores the generated summaries in local JSONL caches. The same preprocessing module then creates two embedding views: one from the LLM-generated summaries and one from the original raw paper text, where raw text is formed by concatenating `title` and `abstract`.
 
-The LLM model and embedding models are expected to be deployed with vLLM. The generated summary and raw-text embedding caches are consumed by the dual-path MMoE reranker during inference or training. Default cache and dataset paths are defined in `reviewer_training_utils.py` and can be overridden from the command line.
+The LLM model and embedding model are expected to be deployed with vLLM. The generated summary and raw-text embedding caches are consumed by the dual-path MMoE reranker during inference or training. Default cache and dataset paths are defined in `reviewer_training_utils.py` and can be overridden from the command line.
 
 ## Inference
 
