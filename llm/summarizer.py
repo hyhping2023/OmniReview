@@ -4,7 +4,44 @@ from typing import Dict, List
 from functools import lru_cache
 from tqdm import tqdm
 import os
+import threading
+import random
 
+# ============================================================
+# Global Port Configuration & Load Balancing
+# ============================================================
+LLM_PORTS = [20000,]
+LLM_HOST = 'localhost'
+
+
+def get_next_port() -> int:
+    """Random port allocation for natural load balancing across processes"""
+    return random.choice(LLM_PORTS)
+
+def llm_query(messages: list, url: str = LLM_HOST, port: int = None) -> str:
+    """调用LLM接口，支持端口负载均衡"""
+    if port is None:
+        port = get_next_port()
+    
+    vllm_url = f"http://{url}:{port}/v1/chat/completions"
+    payload = {
+            "model": "model",
+            "messages": messages,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "presence_penalty": 1.5,
+            "chat_template_kwargs": {"enable_thinking": False}
+        }
+    response = requests.post(vllm_url, json=payload, headers={"Content-Type": "application/json"})
+    response.raise_for_status()
+    result = response.json()
+    summary = result['choices'][0]['message']['content'].strip()
+    return summary
+
+# ============================================================
+# Prompt Templates
+# ============================================================
 system_prompt_template = '''
 You are an expert academic reviewer assistant. Generate a concise, critical summary of the research paper based ONLY on the title and abstract provided. Your summary must help peer reviewers quickly assess the paper's suitability for publication.
 
@@ -70,25 +107,6 @@ Please analyze the following article summaries and provide a comprehensive chara
 {}
 '''
 
-def llm_query(messages: list, url: str='10.123.4.20', port: int = 19999) -> str:
-    """调用LLM接口"""
-    vllm_url = f"http://{url}:{port}/v1/chat/completions"
-    payload = {
-            "model": "model",
-            "messages": messages,
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "top_k": 20,
-            "presence_penalty": 1.5,
-            "chat_template_kwargs": {"enable_thinking": False}
-        }
-    response = requests.post(vllm_url, json=payload, headers={"Content-Type": "application/json"})
-    response.raise_for_status()
-    result = response.json()
-    # print(result)
-    summary = result['choices'][0]['message']['content'].strip()
-    return summary
-
 class LLMSummarizer:
     def __init__(self, output_type, config: Dict = {"llm": {"cache_file": ""}}):
         self.cache_file = config["llm"]["cache_file"]
@@ -120,11 +138,12 @@ class LLMSummarizer:
     def _load_oag_info(self):
         authorid2publications = {}
         print("😋 Loading author publications...")
-        with open(f'/home/sunpenglei/hyh/candidate_tower/llm/mmoe/{self.output_type}_sampled_author_papers.jsonl', 'r') as f:
+        with open(f'{self.output_type}_sampled_author_papers.jsonl', 'r') as f:
             for line in tqdm(f):
                 data = json.loads(line)
                 authorid2publications[data['author_id']] = data['publications']
         print("😋 Loaded author publications!")
+        print(f"Total authors loaded: {len(authorid2publications)}")
         return authorid2publications
     
     def summarize_paper(self, paper_id: str, title: str, abstract: str) -> str:
@@ -190,30 +209,29 @@ class LLMSummarizer:
             print(f"LLM调用失败 {reviewer_id}: {e}")
             return ''
         
-def summarize_paper(paper_id: str, messages: list, output_type:str) -> str:
-        """生成论文摘要（带缓存）"""
-        cache_key = f"paper:{paper_id}"
-        cache_file = f"./data/cache/llm_cache_{output_type}.jsonl"
+def summarize_paper(paper_id: str, messages: list, output_type: str, port: int = None) -> str:
+    """生成论文摘要（带缓存，支持端口负载均衡）"""
+    cache_key = f"paper:{paper_id}"
+    cache_file = f"./data/cache/llm_cache_{output_type}.jsonl"
 
-        try:
-            summary = llm_query(messages)
-            
-            # 写入缓存
-            with open(cache_file, "a") as f:
-                f.write(json.dumps({"id": cache_key, "summary": summary}) + "\n")
-            return summary
-        except Exception as e:
-            print(f"LLM调用失败 {paper_id}: {e}")
-            # 返回默认摘要
-            return ''
+    try:
+        summary = llm_query(messages, port=port)
 
-def summarize_reviewer(reviewer_id:str, messages: list, output_type:str) -> str:
-    """根据审稿人所有论文的摘要，总结其研究专长（带缓存）"""
+        # 写入缓存
+        with open(cache_file, "a") as f:
+            f.write(json.dumps({"id": cache_key, "summary": summary}) + "\n")
+        return summary
+    except Exception as e:
+        print(f"LLM调用失败 {paper_id}: {e}")
+        return ''
+
+def summarize_reviewer(reviewer_id: str, messages: list, output_type: str, port: int = None) -> str:
+    """根据审稿人所有论文的摘要，总结其研究专长（带缓存，支持端口负载均衡）"""
     cache_key = f"reviewer:{reviewer_id}"
     cache_file = f"./data/cache/llm_cache_{output_type}.jsonl"
 
     try:
-        expertise_summary = llm_query(messages)
+        expertise_summary = llm_query(messages, port=port)
         with open(cache_file, "a") as f:
             f.write(json.dumps({"id": cache_key, "summary": expertise_summary}) + "\n")
         return expertise_summary
@@ -225,6 +243,6 @@ def summarize_reviewer(reviewer_id:str, messages: list, output_type:str) -> str:
 if __name__ == "__main__":
     # 测试LLM模块
     config = {"llm": {"cache_file": "./test_cache.jsonl"}}
-    summarizer = LLMSummarizer(config)
+    summarizer = LLMSummarizer('test', config)
     result = summarizer.summarize_paper("test123", "Test", "This is a test abstract.")
     print(result)

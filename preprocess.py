@@ -170,6 +170,32 @@ def summary_embedding(target='train'):
     print(f"Need to embed {len(texts)} summaries for {output_type} set.")
     encoder.encode(ids, texts, output_type=output_type)
 
+def paper_raw_embedding(target='train'):
+    encoder = SummaryEncoder()
+    cache = {}
+    output_type = target # train/val/test
+    if os.path.exists(f'./data/cache/{output_type}_raw_embedding.jsonl'):
+        with open(f'./data/cache/{output_type}_raw_embedding.jsonl', 'r') as f:
+            for line in f:
+                data = json.loads(line)
+                cache[data['id']] = 1
+        print(f"Already {len(cache)} caches found for {output_type} raw embeddings.")
+    with open(f'path/to/{output_type}_dataset_qwen_sampled.parquet', 'rb') as f:
+        df = pd.read_parquet(f)
+        ids = []
+        texts = []
+        for idx, row in enumerate(tqdm(df.itertuples(), total=len(df))):
+            paper_id = row.ID
+            paper_title = row.Title
+            paper_abstract = row.Abstract
+            if paper_id in cache:
+                continue
+            combined_text = f"{paper_title}\n{paper_abstract}"
+            ids.append(paper_id)
+            texts.append(combined_text)
+    print(f"Need to embed {len(texts)} raw papers for {output_type} set.")
+    encoder.encode(ids, texts, output_type=output_type)
+
 if __name__ == "__main__":
     os.makedirs('data/cache', exist_ok=True)
     author_id_extract()
