@@ -2,7 +2,7 @@
 
 OmniReview is a reviewer-paper matching pipeline. It extracts reviewer author ids, gathers each author's papers from OAG-style metadata, summarizes papers with an LLM, embeds both LLM summaries and raw paper text, and runs a dual-path paper-set MMoE reranker for inference.
 
-Datasets are available at [HYHPING2023/OmniReview](https://huggingface.co/datasets/HYHPING2023/OmniReview). The OAG per-paper Discipline Taxonomy files are provided in the same dataset repository. Model weights are available at [HYHPING2023/OmniReview](https://huggingface.co/HYHPING2023/OmniReview).
+Datasets are available at [HYHPING2023/OmniReview](https://huggingface.co/datasets/HYHPING2023/OmniReview). The dataset provides OAG IDs and ORCID IDs that point to corresponding records in [Open Academic Graph](https://www.aminer.cn/open/article?id=5965cf249ed5db41ed4f52bf), using OAG version 3.2. The OAG per-paper Discipline Taxonomy files are provided in the same dataset repository. Model weights are available at [HYHPING2023/OmniReview](https://huggingface.co/HYHPING2023/OmniReview).
 
 ## Repository Layout
 
