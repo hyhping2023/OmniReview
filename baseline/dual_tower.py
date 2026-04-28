@@ -1,14 +1,14 @@
-"""Category-specific two-tower reviewer matching baseline.
+"""Category-specific dual-tower reviewer matching baseline.
 
-This file summarizes and extracts the MultiCategoryClassifier-related baseline
-from the original model.py and dataset.py:
+This file summarizes and extracts the dual-tower baseline from the original
+model.py and dataset.py:
 
 - ArticleTowerV1 encodes target paper features.
 - CandidateTowerV1 encodes each candidate reviewer from historical papers,
   years, and affiliation embeddings.
 - RegressionMLP scores the concatenated paper/reviewer vectors.
-- MultiCategoryClassifier keeps one article tower, candidate tower, and scorer
-  per research category.
+- MultiCategoryClassifier is the category-aware wrapper that keeps one article
+  tower, candidate tower, and scorer per research category.
 
 The expected evaluation dataset follows TowerTestDatasetV1 from dataset.py:
 
@@ -231,4 +231,3 @@ class MultiCategoryClassifier(nn.Module):
             dim=-1,
         )
         return regressor(combined).reshape(-1, candidate_count)
-
